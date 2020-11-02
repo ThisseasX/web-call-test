@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+  </head>
+  <body>
+    <h1><%= dog %></h1>
+    <h1 id="msg"></h1>
+
+    <video id="video"></video>
+
+    <script>
+      const socket = io('/');
+
+      socket.on('connect', () => {
+        console.log('CONNECTED!');
+      });
+
+      socket.on('message', (msg) => {
+        const node = document.getElementById('msg');
+        node.innerText = msg;
+      });
+
+      async function init() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        });
+
+        try {
+          var video = document.querySelector('video');
+          video.srcObject = stream;
+          video.onloadedmetadata = function (e) {
+            video.play();
+          };
+        } catch (err) {
+          console.log(err.name + ': ' + err.message);
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>
