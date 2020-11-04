@@ -2,12 +2,21 @@ const app = require('express')();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
 
-app.set('view engine', 'ejs').use('/', (req, res) => {
-  res.render('index', { dog: 'Hello Dog' });
+const PORT = process.env.PORT || 3000;
+
+app.set('view engine', 'ejs').use('/', (_, res) => {
+  res.render('index');
 });
 
-io.on('connect', (socket) => {
-  socket.emit('message', 'Welcome!');
+io.on('connect', socket => {
+  socket.on('new-peer', peerId => {
+    socket.broadcast.emit('peer-joined', peerId);
+    socket.peerId = peerId;
+  });
+
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('peer-left', socket.peerId);
+  });
 });
 
-server.listen(3000);
+server.listen(PORT);

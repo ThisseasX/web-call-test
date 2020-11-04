@@ -3,45 +3,119 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Web Call Experiment</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+        background-color: #333339;
+      }
+
+      #video-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      }
+
+      video {
+        width: 100%;
+      }
+    </style>
   </head>
   <body>
-    <h1><%= dog %></h1>
-    <h1 id="msg"></h1>
-
-    <video id="video"></video>
+    <div id="video-container"></div>
 
     <script>
-      const socket = io('/');
-
-      socket.on('connect', () => {
-        console.log('CONNECTED!');
+      const peer = new Peer({
+        host: 'thiss-call-test.herokuapp.com',
+        secure: true,
       });
 
-      socket.on('message', (msg) => {
-        const node = document.getElementById('msg');
-        node.innerText = msg;
-      });
+      const videos = {};
 
-      async function init() {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
+      function createVideo(peerId, stream) {
+        const videoContainer = document.querySelector('#video-container');
+        const video = document.createElement('video');
+        videoContainer.appendChild(video);
 
+        video.srcObject = stream;
+        video.onloadedmetadata = e => {
+          video.play();
+        };
+
+        if (peerId !== peer.id) {
+          videos[peerId] = video;
+        }
+      }
+
+      function removeVideo(peerId) {
+        const video = videos[peerId];
+
+        if (video) {
+          video.remove();
+        }
+
+        delete videos[peerId];
+      }
+
+      async function getStream(opts) {
         try {
-          var video = document.querySelector('video');
-          video.srcObject = stream;
-          video.onloadedmetadata = function (e) {
-            video.play();
-          };
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+            ...opts,
+          });
+
+          return stream;
         } catch (err) {
           console.log(err.name + ': ' + err.message);
         }
       }
 
+      const socket = io('/');
+
+      async function init() {
+        const stream = await getStream({ audio: false });
+        createVideo(peer.id, stream);
+      }
+
       init();
+
+      peer.on('open', peerId => {
+        console.log('My peer ID is: ' + peerId);
+
+        socket.emit('new-peer', peerId);
+      });
+
+      socket.on('peer-joined', async peerId => {
+        const stream = await getStream();
+        const call = peer.call(peerId, stream);
+        console.log('CALLING: ' + peerId);
+
+        call.on('stream', stream => {
+          if (!videos[peerId]) {
+            createVideo(peerId, stream);
+            console.log('RECEIVING STREAM FROM: ' + peerId);
+          }
+        });
+      });
+
+      socket.on('peer-left', peerId => {
+        removeVideo(peerId);
+      });
+
+      peer.on('call', async call => {
+        const stream = await getStream();
+        call.answer(stream);
+
+        console.log('RECEIVING CALL FROM: ' + call.peer);
+      });
     </script>
   </body>
 </html>
