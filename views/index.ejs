@@ -110,6 +110,25 @@
         removeVideo(peerId);
       });
 
+      socket.on('all-peers', async (peers = []) => {
+        const calls = [];
+
+        peers
+          .filter(peerId => peerId && peerId !== peer.id)
+          .forEach(async peerId => {
+            console.log({ peerId });
+            const stream = await getStream();
+            const call = peer.call(peerId, stream);
+
+            call.on('stream', stream => {
+              if (!videos[peerId]) {
+                createVideo(peerId, stream);
+                console.log('RECEIVING STREAM FROM: ' + peerId);
+              }
+            });
+          });
+      });
+
       peer.on('call', async call => {
         const stream = await getStream();
         call.answer(stream);

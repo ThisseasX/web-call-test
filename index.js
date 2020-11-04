@@ -12,6 +12,12 @@ io.on('connect', socket => {
   socket.on('new-peer', peerId => {
     socket.broadcast.emit('peer-joined', peerId);
     socket.peerId = peerId;
+
+    const allPeers = Object.entries(io.sockets.sockets).map(
+      ([_, sock]) => sock.peerId,
+    );
+
+    socket.emit('all-peers', allPeers);
   });
 
   socket.on('disconnect', () => {
