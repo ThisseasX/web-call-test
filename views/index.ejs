@@ -37,6 +37,8 @@
         secure: true,
       });
 
+      const socket = io('/');
+
       const videos = {};
 
       function createVideo(peerId, stream) {
@@ -74,37 +76,54 @@
 
           return stream;
         } catch (err) {
-          console.log(err.name + ': ' + err.message);
+          console.error(err.name + ': ' + err.message);
         }
       }
 
-      const socket = io('/');
+      async function callPeer(peerId) {
+        try {
+          const stream = await getStream();
+          const call = peer.call(peerId, stream);
+          console.log('CALLING: ' + peerId);
+
+          call.on('stream', stream => {
+            if (!videos[peerId]) {
+              createVideo(peerId, stream);
+              console.log('RECEIVING STREAM FROM: ' + peerId);
+            }
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      }
 
       async function init() {
-        const stream = await getStream({ audio: false });
-        createVideo(peer.id, stream);
+        try {
+          const stream = await getStream({ audio: false });
+          createVideo(peer.id, stream);
+        } catch (err) {
+          console.error(err);
+        }
       }
 
       init();
 
       peer.on('open', peerId => {
         console.log('My peer ID is: ' + peerId);
-
         socket.emit('new-peer', peerId);
       });
 
-      socket.on('peer-joined', async peerId => {
-        const stream = await getStream();
-        const call = peer.call(peerId, stream);
-        console.log('CALLING: ' + peerId);
-
-        call.on('stream', stream => {
-          if (!videos[peerId]) {
-            createVideo(peerId, stream);
-            console.log('RECEIVING STREAM FROM: ' + peerId);
-          }
-        });
+      peer.on('call', async call => {
+        try {
+          const stream = await getStream();
+          call.answer(stream);
+          console.log('RECEIVING CALL FROM: ' + call.peer);
+        } catch (err) {
+          console.error(err);
+        }
       });
+
+      socket.on('peer-joined', callPeer);
 
       socket.on('peer-left', peerId => {
         removeVideo(peerId);
@@ -112,28 +131,7 @@
 
       socket.on('all-peers', async (peers = []) => {
         const calls = [];
-
-        peers
-          .filter(peerId => peerId && peerId !== peer.id)
-          .forEach(async peerId => {
-            console.log({ peerId });
-            const stream = await getStream();
-            const call = peer.call(peerId, stream);
-
-            call.on('stream', stream => {
-              if (!videos[peerId]) {
-                createVideo(peerId, stream);
-                console.log('RECEIVING STREAM FROM: ' + peerId);
-              }
-            });
-          });
-      });
-
-      peer.on('call', async call => {
-        const stream = await getStream();
-        call.answer(stream);
-
-        console.log('RECEIVING CALL FROM: ' + call.peer);
+        peers.filter(peerId => peerId && peerId !== peer.id).forEach(callPeer);
       });
     </script>
   </body>
