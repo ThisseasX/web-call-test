@@ -35,112 +35,123 @@
     <div id="video-container"></div>
 
     <script>
+      const calls = {};
+      const videoContainer = document.querySelector('#video-container');
+
       const ROOM_ID = '<%= roomId %>';
       const PEER_PORT = '<%= PEER_PORT %>';
       const PEER_HOST = '<%= PEER_HOST %>';
       const PEER_SECURE = '<%= PEER_SECURE %>';
 
-      const peer = new Peer({
+      const socket = io('/');
+
+      const myPeer = new Peer({
         host: PEER_HOST,
         port: PEER_PORT,
         secure: PEER_SECURE === 'true',
+        debug: 2,
       });
 
-      const socket = io('/');
+      function log(label, msg) {
+        console.log(`[${label}]` + (msg ? `: ${msg}` : ''));
+      }
 
-      const videos = {};
-
-      function createVideo(peerId, stream) {
-        const videoContainer = document.querySelector('#video-container');
+      function handleCallStream(call, userPeerId) {
+        log('HANDLE CALL STREAM', userPeerId);
         const video = document.createElement('video');
+
+        call.on('stream', userStream => {
+          log('CALL STREAM', userPeerId);
+
+          if (!calls[userPeerId]) {
+            calls[userPeerId] = { call, video };
+            log('CREATE VIDEO', userPeerId);
+            addVideo(video, userStream, userPeerId);
+          }
+        });
+      }
+
+      function addVideo(video, stream, id, muted) {
         videoContainer.appendChild(video);
 
+        video.muted = muted;
+        video.id = id;
         video.srcObject = stream;
         video.onloadedmetadata = e => {
           video.play();
         };
 
-        if (peerId !== peer.id) {
-          videos[peerId] = video;
-        }
+        return video;
       }
 
-      function removeVideo(peerId) {
-        const video = videos[peerId];
+      navigator.mediaDevices
+        .getUserMedia({
+          audio: {
+            noiseSuppression: true,
+            echoCancellation: true,
+          },
+          video: true,
+        })
+        .then(myStream => {
+          log('INIT');
 
-        if (video) {
+          const video = document.createElement('video');
+          addVideo(video, myStream, myPeer.id, true);
+
+          myPeer.on('call', call => {
+            log('CALL IN', call.peer);
+            call.answer(myStream);
+
+            const video = document.createElement('video');
+
+            call.on('stream', userStream => {
+              log('ANSWER STREAM', call.peer);
+
+              if (!calls[call.peer]) {
+                calls[call.peer] = { call, video };
+                log('CREATE VIDEO', call.peer);
+                addVideo(video, userStream, call.peer);
+              }
+            });
+          });
+
+          socket.on('user-joined', userPeerId => {
+            log('USER JOINED', userPeerId);
+            log('CALL OUT', userPeerId);
+
+            const call = myPeer.call(userPeerId, myStream);
+            const video = document.createElement('video');
+
+            call.on('stream', userStream => {
+              log('CALL STREAM', userPeerId);
+
+              if (!calls[userPeerId]) {
+                calls[userPeerId] = { call, video };
+                log('CREATE VIDEO', userPeerId);
+                addVideo(video, userStream, userPeerId);
+              }
+            });
+          });
+        });
+
+      socket.on('connect', () => {
+        log('SOCKET CONNECT');
+      });
+
+      socket.on('user-left', userPeerId => {
+        const entity = calls[userPeerId] || {};
+        const { call, video } = entity;
+
+        if (call && video) {
+          call.close();
           video.remove();
-        }
-
-        delete videos[peerId];
-      }
-
-      async function getStream(opts) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: true,
-            ...opts,
-          });
-
-          return stream;
-        } catch (err) {
-          console.error(err.name + ': ' + err.message);
-        }
-      }
-
-      async function callPeer(peerId) {
-        try {
-          const stream = await getStream();
-          const call = peer.call(peerId, stream);
-          console.log('CALLING: ' + peerId);
-
-          call.on('stream', stream => {
-            if (!videos[peerId]) {
-              createVideo(peerId, stream);
-              console.log('RECEIVING STREAM FROM: ' + peerId);
-            }
-          });
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      async function init() {
-        try {
-          const stream = await getStream({ audio: false });
-          createVideo(peer.id, stream);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-
-      init();
-
-      peer.on('open', peerId => {
-        console.log('My peer ID is: ' + peerId);
-        socket.emit('new-peer', peerId, ROOM_ID);
-      });
-
-      peer.on('call', async call => {
-        try {
-          const stream = await getStream();
-          call.answer(stream);
-          console.log('RECEIVING CALL FROM: ' + call.peer);
-        } catch (err) {
-          console.error(err);
+          delete calls[userPeerId];
         }
       });
 
-      socket.on('peer-joined', callPeer);
-
-      socket.on('peer-left', peerId => {
-        removeVideo(peerId);
-      });
-
-      socket.on('all-peers-in-room', async (peers = []) => {
-        const calls = [];
-        peers.filter(peerId => peerId && peerId !== peer.id).forEach(callPeer);
+      myPeer.on('open', peerId => {
+        log('ME', peerId);
+        socket.emit('join-room', ROOM_ID, peerId);
       });
     </script>
   </body>
