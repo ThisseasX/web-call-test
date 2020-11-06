@@ -4,13 +4,24 @@
   "description": "Testing WebRTC calls with PeerJS.",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
+    "dev": "bnr dev",
     "start": "node index.js"
+  },
+  "betterScripts": {
+    "dev": {
+      "command": "nodemon index.js",
+      "env": {
+        "PEER_HOST": "/",
+        "PEER_SECURE": false,
+        "PEER_PORT": 3001
+      }
+    }
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "better-npm-run": "^0.1.1",
     "ejs": "^3.1.5",
     "express": "^4.17.1",
     "lodash": "^4.17.20",

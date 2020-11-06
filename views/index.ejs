@@ -21,10 +21,13 @@
       #video-container {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        grid-auto-rows: 300px;
       }
 
       video {
         width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
     </style>
   </head>
@@ -32,9 +35,15 @@
     <div id="video-container"></div>
 
     <script>
+      const ROOM_ID = '<%= roomId %>';
+      const PEER_PORT = '<%= PEER_PORT %>';
+      const PEER_HOST = '<%= PEER_HOST %>';
+      const PEER_SECURE = '<%= PEER_SECURE %>';
+
       const peer = new Peer({
-        host: 'thiss-call-test.herokuapp.com',
-        secure: true,
+        host: PEER_HOST,
+        port: PEER_PORT,
+        secure: PEER_SECURE === 'true',
       });
 
       const socket = io('/');
@@ -110,7 +119,7 @@
 
       peer.on('open', peerId => {
         console.log('My peer ID is: ' + peerId);
-        socket.emit('new-peer', peerId);
+        socket.emit('new-peer', peerId, ROOM_ID);
       });
 
       peer.on('call', async call => {
@@ -129,7 +138,7 @@
         removeVideo(peerId);
       });
 
-      socket.on('all-peers', async (peers = []) => {
+      socket.on('all-peers-in-room', async (peers = []) => {
         const calls = [];
         peers.filter(peerId => peerId && peerId !== peer.id).forEach(callPeer);
       });
