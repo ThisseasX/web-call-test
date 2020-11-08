@@ -13,7 +13,8 @@
       "env": {
         "PEER_HOST": "/",
         "PEER_SECURE": false,
-        "PEER_PORT": 3001
+        "PEER_PORT": 3001,
+        "DEBUG": true
       }
     }
   },
